@@ -42,6 +42,13 @@ BSC 主網上的可驗證隨機數服務。你的合約發起請求，預言機�
 
 你的合約請求一個隨機數。預言機對一個包含請求區塊雜湊的種子簽名；鏈上驗證簽名，由簽名派生出隨機數，再回撥你的合約。一個種子只有唯一合法的簽名，所以預言機無法挑選結果，任何人事後都能複核。
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="images/vrf-overview-zh-TW-dark.png">
+    <img alt="總覽圖：你的合約、PayPerRequest、協調器、驗證器、HeaderArchive、OperatorRegistry 與運營方的預言機節點" src="images/vrf-overview-zh-TW-light.png" width="900">
+  </picture>
+</p>
+
 <a id="how-lifecycle"></a>
 ### 0.1 請求全流程
 

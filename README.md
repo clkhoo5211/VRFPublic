@@ -42,6 +42,13 @@ A verifiable randomness service on BNB Smart Chain mainnet. Your contract sends 
 
 Your contract asks for a random number. An oracle signs a seed that includes the hash of the request block. The chain verifies the signature, derives the random number from it and calls your contract back. A seed has exactly one valid signature, so the oracle cannot choose the result, and anyone can re-check it later.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="images/vrf-overview-en-dark.png">
+    <img alt="Overview: your contract, PayPerRequest, Coordinator, Verifier, HeaderArchive, OperatorRegistry and the operator's oracle node" src="images/vrf-overview-en-light.png" width="900">
+  </picture>
+</p>
+
 <a id="how-lifecycle"></a>
 ### 0.1 Request lifecycle
 

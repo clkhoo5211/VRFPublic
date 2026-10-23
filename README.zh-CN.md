@@ -42,6 +42,13 @@ BSC 主网上的可验证随机数服务。你的合约发起请求，预言机�
 
 你的合约请求一个随机数。预言机对一个包含请求区块哈希的种子签名；链上验证签名，由签名派生出随机数，再回调你的合约。一个种子只有唯一合法的签名，所以预言机无法挑选结果，任何人事后都能复核。
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="images/vrf-overview-zh-CN-dark.png">
+    <img alt="总览图：你的合约、PayPerRequest、协调器、验证器、HeaderArchive、OperatorRegistry 与运营方的预言机节点" src="images/vrf-overview-zh-CN-light.png" width="900">
+  </picture>
+</p>
+
 <a id="how-lifecycle"></a>
 ### 0.1 请求全流程
 
