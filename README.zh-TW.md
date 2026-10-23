@@ -8,51 +8,13 @@ BSC 主網上的可驗證隨機數服務。你的合約發起請求，預言機�
 - 支付：原生 **BNB**
 - 接入方式：**訂閱制**（預付、按實際成本扣費）或 **付錢即用**（每次請求附帶 BNB）
 
-<a id="how"></a>
-## 工作原理
-
-你的合約請求一個隨機數。預言機對一個包含請求區塊雜湊的種子簽名；鏈上驗證簽名，由簽名派生出隨機數，再回撥你的合約。一個種子只有唯一合法的簽名，所以預言機無法挑選結果，任何人事後都能複核。
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as 你的合約
-    participant K as 協調器
-    participant O as 預言機節點
-    participant V as 驗證器
-    participant A as HeaderArchive
-    C->>K: request(lane, subId, confirmations, callbackGas, numWords)
-    K->>K: 從訂閱裡預留最壞成本
-    K-->>O: 事件 Requested（請求 id、請求區塊）
-    O->>O: 等夠確認數，讀取請求區塊雜湊
-    O->>O: 種子 = hash(協調器, chainId, requestId, 區塊雜湊)；用 BLS 金鑰簽名
-    O->>K: fulfil(簽名, 請求)
-    K->>V: verify(公鑰, 種子, 簽名)
-    V-->>K: 驗證透過；隨機輸出 = keccak256(簽名)
-    K->>C: onRandomness(requestId, words)
-    K->>K: 按實際成本扣費（不超過預留），記入運營方收益，釋放預留
-    O->>A: store(請求區塊)，超過 256 塊後仍可複驗
-```
-
-**出問題時會怎樣**
-
-```mermaid
-flowchart TD
-    R["請求已發出"] --> F["按時履約"]
-    F --> CB["呼叫 onRandomness"]
-    F --> CBF["回撥失敗（revert 或 gas 不足）"]
-    CBF --> DV["結果被儲存，任何人可用 redeliver / retry 再次投遞"]
-    R --> TO["100,000 塊內未履約"]
-    TO --> CN["請求被取消，你的合約收到 onRequestCancelled：作廢本輪或退款"]
-    R --> MS["運營方 8000 塊內未履約"]
-    MS --> RP["任何人可舉報，2 天爭議期後罰沒部分保證金"]
-```
-
 ## 目錄
 
 0. [工作原理](#how)
+   - [0.1 請求全流程](#how-lifecycle)
+   - [0.2 出問題時會怎樣](#how-fail)
 1. [合約地址](#addresses)
-2. [引數與限制](#params)
+2. [參數與限制](#params)
 3. [快速接入](#quickstart)
    - [3.1 先定義介面](#interfaces)
    - [3.2 方式一：訂閱制](#subscription)
@@ -75,6 +37,50 @@ flowchart TD
 9. [限制](#limits)
 10. [許可](#license)
 
+<a id="how"></a>
+## 工作原理
+
+你的合約請求一個隨機數。預言機對一個包含請求區塊雜湊的種子簽名；鏈上驗證簽名，由簽名派生出隨機數，再回撥你的合約。一個種子只有唯一合法的簽名，所以預言機無法挑選結果，任何人事後都能複核。
+
+<a id="how-lifecycle"></a>
+### 0.1 請求全流程
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as 你的合約
+    participant K as 協調器
+    participant O as 預言機節點
+    participant V as 驗證器
+    participant A as HeaderArchive
+    C->>K: request(lane, subId, confirmations, callbackGas, numWords)
+    K->>K: 從訂閱裡預留最壞成本
+    K-->>O: 事件 Requested（請求 id、請求區塊）
+    O->>O: 等夠確認數，讀取請求區塊雜湊
+    O->>O: 種子 = hash(協調器, chainId, requestId, 區塊雜湊)；用 BLS 金鑰簽名
+    O->>K: fulfil(簽名, 請求)
+    K->>V: verify(公鑰, 種子, 簽名)
+    V-->>K: 驗證透過；隨機輸出 = keccak256(簽名)
+    K->>C: onRandomness(requestId, words)
+    K->>K: 按實際成本扣費（不超過預留），記入運營方收益，釋放預留
+    O->>A: store(請求區塊)，超過 256 塊後仍可複驗
+```
+
+<a id="how-fail"></a>
+### 0.2 出問題時會怎樣
+
+```mermaid
+flowchart TD
+    R["請求已發出"] --> F["按時履約"]
+    F --> CB["呼叫 onRandomness"]
+    F --> CBF["回撥失敗（revert 或 gas 不足）"]
+    CBF --> DV["結果被儲存，任何人可用 redeliver / retry 再次投遞"]
+    R --> TO["100,000 塊內未履約"]
+    TO --> CN["請求被取消，你的合約收到 onRequestCancelled：作廢本輪或退款"]
+    R --> MS["運營方 8000 塊內未履約"]
+    MS --> RP["任何人可舉報，2 天爭議期後罰沒部分保證金"]
+```
+
 <a id="addresses"></a>
 ## 1. 合約地址（BSC 主網，chainId 56）
 
@@ -92,7 +98,7 @@ flowchart TD
 lane 是一個預言機金鑰的標識（公鑰的 `keccak256`）。發請求時必須指定 lane。協調器與 PayPerRequest 均為可升級代理合約，**請始終使用上表的代理地址**。
 
 <a id="params"></a>
-## 2. 引數與限制
+## 2. 參數與限制
 
 | 專案 | 值 |
 |---|---|
@@ -438,7 +444,7 @@ docker run -d --name vrf-monitor --restart unless-stopped --env-file monitor.env
 - **升級節點：**
   1. 下載新版本，校驗 `SHA256SUMS`，`docker build -t vrf-oracle:<新版本> .`
   2. `docker stop vrf-oracle && docker rm vrf-oracle`
-  3. 用同樣的引數和**同一個 `vrf-state` 卷**啟動新映象，遊標會接著用。
+  3. 用同樣的參數和**同一個 `vrf-state` 卷**啟動新映象，遊標會接著用。
 - **熱錢包餘額。** 低於 0.01 BNB 就補，不要等到發不出交易。
 - **RPC。** 至少兩個供應商；注意免費額度（輪詢間隔 3000~5000 毫秒足夠，間隔太短會很快耗光額度）。
 - **備份。** `keys/oracle.keystore` 和口令檔案要離線備份；**丟失 BLS 金鑰 = 該 lane 無法繼續服務**，需要重新生成金鑰並重新申請。

@@ -8,49 +8,11 @@ BSC 主网上的可验证随机数服务。你的合约发起请求，预言机�
 - 支付：原生 **BNB**
 - 接入方式：**订阅制**（预付、按实际成本扣费）或 **付钱即用**（每次请求附带 BNB）
 
-<a id="how"></a>
-## 工作原理
-
-你的合约请求一个随机数。预言机对一个包含请求区块哈希的种子签名；链上验证签名，由签名派生出随机数，再回调你的合约。一个种子只有唯一合法的签名，所以预言机无法挑选结果，任何人事后都能复核。
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as 你的合约
-    participant K as 协调器
-    participant O as 预言机节点
-    participant V as 验证器
-    participant A as HeaderArchive
-    C->>K: request(lane, subId, confirmations, callbackGas, numWords)
-    K->>K: 从订阅里预留最坏成本
-    K-->>O: 事件 Requested（请求 id、请求区块）
-    O->>O: 等够确认数，读取请求区块哈希
-    O->>O: 种子 = hash(协调器, chainId, requestId, 区块哈希)；用 BLS 密钥签名
-    O->>K: fulfil(签名, 请求)
-    K->>V: verify(公钥, 种子, 签名)
-    V-->>K: 验证通过；随机输出 = keccak256(签名)
-    K->>C: onRandomness(requestId, words)
-    K->>K: 按实际成本扣费（不超过预留），记入运营方收益，释放预留
-    O->>A: store(请求区块)，超过 256 块后仍可复验
-```
-
-**出问题时会怎样**
-
-```mermaid
-flowchart TD
-    R["请求已发出"] --> F["按时履约"]
-    F --> CB["调用 onRandomness"]
-    F --> CBF["回调失败（revert 或 gas 不足）"]
-    CBF --> DV["结果被保存，任何人可用 redeliver / retry 再次投递"]
-    R --> TO["100,000 块内未履约"]
-    TO --> CN["请求被取消，你的合约收到 onRequestCancelled：作废本轮或退款"]
-    R --> MS["运营方 8000 块内未履约"]
-    MS --> RP["任何人可举报，2 天争议期后罚没部分保证金"]
-```
-
 ## 目录
 
 0. [工作原理](#how)
+   - [0.1 请求全流程](#how-lifecycle)
+   - [0.2 出问题时会怎样](#how-fail)
 1. [合约地址](#addresses)
 2. [参数与限制](#params)
 3. [快速接入](#quickstart)
@@ -74,6 +36,50 @@ flowchart TD
    - [8.10 退出](#op-exit)
 9. [限制](#limits)
 10. [许可](#license)
+
+<a id="how"></a>
+## 工作原理
+
+你的合约请求一个随机数。预言机对一个包含请求区块哈希的种子签名；链上验证签名，由签名派生出随机数，再回调你的合约。一个种子只有唯一合法的签名，所以预言机无法挑选结果，任何人事后都能复核。
+
+<a id="how-lifecycle"></a>
+### 0.1 请求全流程
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as 你的合约
+    participant K as 协调器
+    participant O as 预言机节点
+    participant V as 验证器
+    participant A as HeaderArchive
+    C->>K: request(lane, subId, confirmations, callbackGas, numWords)
+    K->>K: 从订阅里预留最坏成本
+    K-->>O: 事件 Requested（请求 id、请求区块）
+    O->>O: 等够确认数，读取请求区块哈希
+    O->>O: 种子 = hash(协调器, chainId, requestId, 区块哈希)；用 BLS 密钥签名
+    O->>K: fulfil(签名, 请求)
+    K->>V: verify(公钥, 种子, 签名)
+    V-->>K: 验证通过；随机输出 = keccak256(签名)
+    K->>C: onRandomness(requestId, words)
+    K->>K: 按实际成本扣费（不超过预留），记入运营方收益，释放预留
+    O->>A: store(请求区块)，超过 256 块后仍可复验
+```
+
+<a id="how-fail"></a>
+### 0.2 出问题时会怎样
+
+```mermaid
+flowchart TD
+    R["请求已发出"] --> F["按时履约"]
+    F --> CB["调用 onRandomness"]
+    F --> CBF["回调失败（revert 或 gas 不足）"]
+    CBF --> DV["结果被保存，任何人可用 redeliver / retry 再次投递"]
+    R --> TO["100,000 块内未履约"]
+    TO --> CN["请求被取消，你的合约收到 onRequestCancelled：作废本轮或退款"]
+    R --> MS["运营方 8000 块内未履约"]
+    MS --> RP["任何人可举报，2 天争议期后罚没部分保证金"]
+```
 
 <a id="addresses"></a>
 ## 1. 合约地址（BSC 主网，chainId 56）

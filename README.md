@@ -8,49 +8,11 @@ A verifiable randomness service on BNB Smart Chain mainnet. Your contract sends 
 - Payment: native **BNB**
 - Two ways to integrate: **Subscription** (prepaid, billed at actual cost) or **Pay-per-request** (attach BNB to each request)
 
-<a id="how"></a>
-## How it works
-
-Your contract asks for a random number. An oracle signs a seed that includes the hash of the request block. The chain verifies the signature, derives the random number from it and calls your contract back. A seed has exactly one valid signature, so the oracle cannot choose the result, and anyone can re-check it later.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as Your contract
-    participant K as Coordinator
-    participant O as Oracle node
-    participant V as Verifier
-    participant A as HeaderArchive
-    C->>K: request(lane, subId, confirmations, callbackGas, numWords)
-    K->>K: reserve the worst-case cost from the subscription
-    K-->>O: event Requested (request id, request block)
-    O->>O: wait for the confirmations, read the request block hash
-    O->>O: seed = hash(coordinator, chainId, requestId, block hash), then sign it with the BLS key
-    O->>K: fulfil(signature, request)
-    K->>V: verify(public key, seed, signature)
-    V-->>K: valid, random output = keccak256(signature)
-    K->>C: onRandomness(requestId, words)
-    K->>K: charge the actual cost (never above the reservation), credit the operator, release the reservation
-    O->>A: store(request block), so it can still be verified after 256 blocks
-```
-
-**What happens when something goes wrong**
-
-```mermaid
-flowchart TD
-    R["Request sent"] --> F["Fulfilled in time"]
-    F --> CB["onRandomness is called"]
-    F --> CBF["Callback fails (revert or out of gas)"]
-    CBF --> DV["Result is stored. Anyone can deliver it again with redeliver / retry"]
-    R --> TO["Not fulfilled within 100,000 blocks"]
-    TO --> CN["Request is cancelled. Your contract gets onRequestCancelled: void the round or refund"]
-    R --> MS["Operator does not fulfil within 8000 blocks"]
-    MS --> RP["Anyone can report it. After a 2-day dispute period part of the bond is slashed"]
-```
-
 ## Table of contents
 
 0. [How it works](#how)
+   - [0.1 Request lifecycle](#how-lifecycle)
+   - [0.2 What happens when something goes wrong](#how-fail)
 1. [Contract addresses](#addresses)
 2. [Parameters and limits](#params)
 3. [Quick start](#quickstart)
@@ -74,6 +36,50 @@ flowchart TD
    - [8.10 Exiting](#op-exit)
 9. [Limitations](#limits)
 10. [License](#license)
+
+<a id="how"></a>
+## How it works
+
+Your contract asks for a random number. An oracle signs a seed that includes the hash of the request block. The chain verifies the signature, derives the random number from it and calls your contract back. A seed has exactly one valid signature, so the oracle cannot choose the result, and anyone can re-check it later.
+
+<a id="how-lifecycle"></a>
+### 0.1 Request lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Your contract
+    participant K as Coordinator
+    participant O as Oracle node
+    participant V as Verifier
+    participant A as HeaderArchive
+    C->>K: request(lane, subId, confirmations, callbackGas, numWords)
+    K->>K: reserve the worst-case cost from the subscription
+    K-->>O: event Requested (request id, request block)
+    O->>O: wait for the confirmations, read the request block hash
+    O->>O: seed = hash(coordinator, chainId, requestId, block hash), then sign it with the BLS key
+    O->>K: fulfil(signature, request)
+    K->>V: verify(public key, seed, signature)
+    V-->>K: valid, random output = keccak256(signature)
+    K->>C: onRandomness(requestId, words)
+    K->>K: charge the actual cost (never above the reservation), credit the operator, release the reservation
+    O->>A: store(request block), so it can still be verified after 256 blocks
+```
+
+<a id="how-fail"></a>
+### 0.2 What happens when something goes wrong
+
+```mermaid
+flowchart TD
+    R["Request sent"] --> F["Fulfilled in time"]
+    F --> CB["onRandomness is called"]
+    F --> CBF["Callback fails (revert or out of gas)"]
+    CBF --> DV["Result is stored. Anyone can deliver it again with redeliver / retry"]
+    R --> TO["Not fulfilled within 100,000 blocks"]
+    TO --> CN["Request is cancelled. Your contract gets onRequestCancelled: void the round or refund"]
+    R --> MS["Operator does not fulfil within 8000 blocks"]
+    MS --> RP["Anyone can report it. After a 2-day dispute period part of the bond is slashed"]
+```
 
 <a id="addresses"></a>
 ## 1. Contract addresses (BNB Smart Chain mainnet, chainId 56)
