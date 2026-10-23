@@ -8,8 +8,49 @@ BSC 主網上的可驗證隨機數服務。你的合約發起請求，預言機�
 - 支付：原生 **BNB**
 - 接入方式：**訂閱制**（預付、按實際成本扣費）或 **付錢即用**（每次請求附帶 BNB）
 
+<a id="how"></a>
+## 工作原理
+
+你的合約請求一個隨機數。預言機對一個包含請求區塊雜湊的種子簽名；鏈上驗證簽名，由簽名派生出隨機數，再回撥你的合約。一個種子只有唯一合法的簽名，所以預言機無法挑選結果，任何人事後都能複核。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as 你的合約
+    participant K as 協調器
+    participant O as 預言機節點
+    participant V as 驗證器
+    participant A as HeaderArchive
+    C->>K: request(lane, subId, confirmations, callbackGas, numWords)
+    K->>K: 從訂閱裡預留最壞成本
+    K-->>O: 事件 Requested（請求 id、請求區塊）
+    O->>O: 等夠確認數，讀取請求區塊雜湊
+    O->>O: 種子 = hash(協調器, chainId, requestId, 區塊雜湊)；用 BLS 金鑰簽名
+    O->>K: fulfil(簽名, 請求)
+    K->>V: verify(公鑰, 種子, 簽名)
+    V-->>K: 驗證透過；隨機輸出 = keccak256(簽名)
+    K->>C: onRandomness(requestId, words)
+    K->>K: 按實際成本扣費（不超過預留），記入運營方收益，釋放預留
+    O->>A: store(請求區塊)，超過 256 塊後仍可複驗
+```
+
+**出問題時會怎樣**
+
+```mermaid
+flowchart TD
+    R["請求已發出"] --> F["按時履約"]
+    F --> CB["呼叫 onRandomness"]
+    F --> CBF["回撥失敗（revert 或 gas 不足）"]
+    CBF --> DV["結果被儲存，任何人可用 redeliver / retry 再次投遞"]
+    R --> TO["100,000 塊內未履約"]
+    TO --> CN["請求被取消，你的合約收到 onRequestCancelled：作廢本輪或退款"]
+    R --> MS["運營方 8000 塊內未履約"]
+    MS --> RP["任何人可舉報，2 天爭議期後罰沒部分保證金"]
+```
+
 ## 目錄
 
+0. [工作原理](#how)
 1. [合約地址](#addresses)
 2. [引數與限制](#params)
 3. [快速接入](#quickstart)
@@ -150,6 +191,17 @@ function play() external payable {
 
 回撥失敗時隨機數會被儲存，可呼叫 PayPerRequest 的 `retry(requestId)` 再次投遞，不會丟失。
 
+**付錢即用的路徑**
+
+```mermaid
+flowchart LR
+    U["你的合約"] -->|"帶 BNB 發請求"| P["PayPerRequest"]
+    P -->|"給自己的訂閱充值併發出請求"| K["協調器"]
+    K -->|"履約後：onRandomness"| P
+    P -->|"轉發結果：onRandomness"| U
+    P -.->|"多付的部分退回"| U
+```
+
 <a id="fees"></a>
 ## 4. 費用
 
@@ -212,6 +264,18 @@ function play() external payable {
 - 准入：提交公鑰和持有證明，繳納保證金，**經審批後生效**。
 - 保證金：**最低 2 BNB**，退出時取回（扣除罰沒後）。
 - 收益：服務費的 **70%**（預設，上限 90%）+ 履約 gas 補償。
+
+**運營方生命週期**
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: applyOperator + 保證金（2 BNB）
+    Pending --> Active: 審批透過
+    Active --> Suspended: 7 天內累計 3 次罰沒
+    Suspended --> Active: 補足保證金並恢復
+    Active --> Exiting: requestExit
+    Exiting --> [*]: 14 天解押期滿後 withdraw
+```
 
 <a id="op-prepare"></a>
 ### 8.2 準備清單
